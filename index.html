@@ -189,6 +189,7 @@
 
     <script>
         const edgeFunctionUrl = 'https://mihtvcbzguzkvfwnlnem.supabase.co/functions/v1/add-messages';
+        const supabaseApiKey = 'YOUR_SUPABASE_ANON_KEY'; // แทนที่ด้วย anon key จาก Supabase Dashboard
         const typeColors = {
             'TEXT': 'bg-green-500',
             'IMAGE': 'bg-blue-500',
@@ -206,11 +207,15 @@
             try {
                 const response = await fetch(edgeFunctionUrl, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${supabaseApiKey}`
+                    },
                     body: JSON.stringify({ method: 'GET', data: { search } })
                 });
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const errorData = await response.json();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.message || 'Unknown error'}`);
                 }
                 const data = await response.json();
                 if (!Array.isArray(data)) {
@@ -333,11 +338,15 @@
             try {
                 const response = await fetch(edgeFunctionUrl, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ method: 'GET_BY_ID', id }) // เปลี่ยนเป็น GET_BY_ID เพื่อความชัดเจน
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${supabaseApiKey}`
+                    },
+                    body: JSON.stringify({ method: 'GET_BY_ID', id: parseInt(id) })
                 });
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const errorData = await response.json();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.message || 'Unknown error'}`);
                 }
                 const data = await response.json();
                 if (!data) {
@@ -362,11 +371,15 @@
                 try {
                     const response = await fetch(edgeFunctionUrl, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ method: 'DELETE', id })
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${supabaseApiKey}`
+                        },
+                        body: JSON.stringify({ method: 'DELETE', id: parseInt(id) })
                     });
                     if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
+                        const errorData = await response.json();
+                        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.message || 'Unknown error'}`);
                     }
                     Toastify({ text: 'Record deleted successfully', backgroundColor: 'green' }).showToast();
                     await renderTable();
@@ -391,11 +404,15 @@
             try {
                 const response = await fetch(edgeFunctionUrl, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${supabaseApiKey}`
+                    },
                     body: JSON.stringify({ method, data, id: id ? parseInt(id) : undefined })
                 });
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    const errorData = await response.json();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.message || 'Unknown error'}`);
                 }
                 Toastify({ text: 'Record saved successfully', backgroundColor: 'green' }).showToast();
                 confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
