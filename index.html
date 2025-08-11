@@ -188,269 +188,271 @@
     </div>
 
     <script>
-        const edgeFunctionUrl = 'https://mihtvcbzguzkvfwnlnem.supabase.co/functions/v1/add-messages';
-        const supabaseApiKey = 'YOUR_SUPABASE_ANON_KEY'; // แทนที่ด้วย anon key จาก Supabase Dashboard
-        const typeColors = {
-            'TEXT': 'bg-green-500',
-            'IMAGE': 'bg-blue-500',
-            'VIDEO': 'bg-red-500',
-            'FLEX': 'bg-yellow-500',
-            'TEMPLATE': 'bg-purple-500',
-            'IMAGEMAP': 'bg-indigo-500',
-            'AUDIO': 'bg-pink-500',
-            'STICKER': 'bg-orange-500',
-            'LOCATION': 'bg-teal-500',
-            'FILE': 'bg-cyan-500'
-        };
+    const edgeFunctionUrl = 'https://mihtvcbzguzkvfwnlnem.supabase.co/functions/v1/add-messages';
+    const typeColors = {
+        'TEXT': 'bg-green-500',
+        'IMAGE': 'bg-blue-500',
+        'VIDEO': 'bg-red-500',
+        'FLEX': 'bg-yellow-500',
+        'TEMPLATE': 'bg-purple-500',
+        'IMAGEMAP': 'bg-indigo-500',
+        'AUDIO': 'bg-pink-500',
+        'STICKER': 'bg-orange-500',
+        'LOCATION': 'bg-teal-500',
+        'FILE': 'bg-cyan-500'
+    };
 
-        let typeChartInstance = null; // ตัวแปรสำหรับเก็บ instance ของ Chart.js
+    let typeChartInstance = null;
 
-        async function fetchBotLines(search = '') {
-            try {
-                const response = await fetch(edgeFunctionUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${supabaseApiKey}`
-                    },
-                    body: JSON.stringify({ method: 'GET', data: { search } })
-                });
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.message || 'Unknown error'}`);
-                }
-                const data = await response.json();
-                if (!Array.isArray(data)) {
-                    throw new Error('Response is not an array');
-                }
-                return data;
-            } catch (error) {
-                Toastify({ text: `Error fetching data: ${error.message}`, backgroundColor: 'red' }).showToast();
-                return [];
-            }
-        }
-
-        async function renderTable(search = '') {
-            const data = await fetchBotLines(search);
-            const tbody = document.getElementById('botLineTable');
-            tbody.innerHTML = '';
-            data.forEach(row => {
-                const tr = document.createElement('tr');
-                tr.className = 'table-row border-b';
-                const typeClass = typeColors[row.type] || 'bg-gray-500';
-                tr.innerHTML = `
-                    <td class="p-2 text-gray-800">${row.id}</td>
-                    <td class="p-2 text-gray-800">${row.intent}</td>
-                    <td class="p-2"><span class="type-badge ${typeClass}">${row.type}</span></td>
-                    <td class="p-2">
-                        <button onclick="editBotLine(${row.id})" class="text-blue-500 hover:underline">Edit</button>
-                        <button onclick="deleteBotLine(${row.id})" class="text-red-500 hover:underline ml-2">Delete</button>
-                        <button onclick="showPreview(${JSON.stringify(row)})" class="text-green-500 hover:underline ml-2">Preview</button>
-                    </td>
-                `;
-                tr.onclick = () => showModal(row);
-                tbody.appendChild(tr);
-            });
-            renderChart(data);
-        }
-
-        async function renderChart(data) {
-            const types = ['TEXT', 'IMAGE', 'VIDEO', 'FLEX', 'TEMPLATE', 'IMAGEMAP', 'AUDIO', 'STICKER', 'LOCATION', 'FILE'];
-            const counts = types.map(type => data.filter(row => row.type === type).length);
-            const colors = ['#22c55e', '#3b82f6', '#ef4444', '#eab308', '#a855f7', '#6366f1', '#ec4899', '#f97316', '#14b8a6', '#06b6d4'];
-            const ctx = document.getElementById('typeChart').getContext('2d');
-            
-            // ทำลายกราฟเก่าถ้ามี
-            if (typeChartInstance) {
-                typeChartInstance.destroy();
-                typeChartInstance = null;
-            }
-
-            // สร้างกราฟใหม่
-            typeChartInstance = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: types,
-                    datasets: [{
-                        data: counts,
-                        backgroundColor: colors
-                    }]
+    async function fetchBotLines(search = '') {
+        try {
+            const response = await fetch(edgeFunctionUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
                 },
-                options: { responsive: true }
+                body: JSON.stringify({ method: 'GET', data: { search } })
             });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error || 'Unknown error'}`);
+            }
+            const data = await response.json();
+            if (!Array.isArray(data)) {
+                throw new Error('Response is not an array');
+            }
+            return data;
+        } catch (error) {
+            Toastify({ text: `Error fetching data: ${error.message}`, backgroundColor: 'red' }).showToast();
+            return [];
         }
+    }
 
-        function showModal(row) {
-            const modal = document.getElementById('modal');
-            const modalContent = document.getElementById('modalContent');
+    async function renderTable(search = '') {
+        const data = await fetchBotLines(search);
+        const tbody = document.getElementById('botLineTable');
+        tbody.innerHTML = '';
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.className = 'table-row border-b';
             const typeClass = typeColors[row.type] || 'bg-gray-500';
-            modalContent.innerHTML = `
-                <p><strong class="text-purple-600">ID:</strong> <span class="text-gray-800">${row.id}</span></p>
-                <p><strong class="text-purple-600">Intent:</strong> <span class="text-gray-800">${row.intent}</span></p>
-                <p><strong class="text-purple-600">Type:</strong> <span class="type-badge ${typeClass}">${row.type}</span></p>
-                <p><strong class="text-purple-600">Content:</strong> <span class="text-gray-800">${row.content}</span></p>
-                <p><strong class="text-purple-600">Preview:</strong> <span class="text-gray-800">${row.preview || '-'}</span></p>
-                <p><strong class="text-purple-600">Place:</strong> <span class="text-gray-800">${row.place || '-'}</span></p>
-                <p><strong class="text-purple-600">Address:</strong> <span class="text-gray-800">${row.address || '-'}</span></p>
+            tr.innerHTML = `
+                <td class="p-2 text-gray-800">${row.id}</td>
+                <td class="p-2 text-gray-800">${row.intent}</td>
+                <td class="p-2"><span class="type-badge ${typeClass}">${row.type}</span></td>
+                <td class="p-2">
+                    <button onclick="editBotLine(${row.id})" class="text-blue-500 hover:underline">Edit</button>
+                    <button onclick="deleteBotLine(${row.id})" class="text-red-500 hover:underline ml-2">Delete</button>
+                    <button onclick="showPreview(${JSON.stringify(row)})" class="text-green-500 hover:underline ml-2">Preview</button>
+                </td>
             `;
-            modal.classList.remove('hidden');
+            tr.onclick = () => showModal(row);
+            tbody.appendChild(tr);
+        });
+        renderChart(data);
+    }
+
+    async function renderChart(data) {
+        const types = ['TEXT', 'IMAGE', 'VIDEO', 'FLEX', 'TEMPLATE', 'IMAGEMAP', 'AUDIO', 'STICKER', 'LOCATION', 'FILE'];
+        const counts = types.map(type => data.filter(row => row.type === type).length);
+        const colors = ['#22c55e', '#3b82f6', '#ef4444', '#eab308', '#a855f7', '#6366f1', '#ec4899', '#f97316', '#14b8a6', '#06b6d4'];
+        const ctx = document.getElementById('typeChart').getContext('2d');
+        
+        if (typeChartInstance) {
+            typeChartInstance.destroy();
+            typeChartInstance = null;
         }
 
-        document.getElementById('closeModal').onclick = function() {
-            document.getElementById('modal').classList.add('hidden');
-        };
+        typeChartInstance = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: types,
+                datasets: [{
+                    data: counts,
+                    backgroundColor: colors
+                }]
+            },
+            options: { responsive: true }
+        });
+    }
 
-        function showPreview(row) {
-            const previewModal = document.getElementById('previewModal');
-            const previewContent = document.getElementById('previewContent');
-            previewContent.innerHTML = '';
-            let previewHtml = '';
-            const mediaUrl = row.preview || row.content;
-            switch (row.type) {
-                case 'TEXT':
-                    previewHtml = `<p class="text-gray-800">${row.content}</p>`;
-                    break;
-                case 'IMAGE':
-                    previewHtml = `<img src="${mediaUrl}" alt="Image Preview" class="max-w-full h-auto">`;
-                    break;
-                case 'VIDEO':
-                    previewHtml = `<video controls src="${mediaUrl}" class="max-w-full h-auto"></video>`;
-                    break;
-                case 'AUDIO':
-                    previewHtml = `<audio controls src="${mediaUrl}"></audio>`;
-                    break;
-                case 'STICKER':
-                    previewHtml = `<p class="text-gray-800">Sticker: ${row.content}</p>`;
-                    break;
-                case 'LOCATION':
-                    previewHtml = `<p class="text-gray-800">Location: ${row.place || ''} - ${row.address || ''}</p>`;
-                    break;
-                case 'FILE':
-                    previewHtml = `<a href="${mediaUrl}" target="_blank" class="text-blue-500 hover:underline">Download File</a>`;
-                    break;
-                case 'FLEX':
-                case 'TEMPLATE':
-                case 'IMAGEMAP':
-                    previewHtml = `<pre class="whitespace-pre-wrap text-gray-800">${row.content}</pre>`;
-                    break;
-                default:
-                    previewHtml = `<p class="text-gray-800">Preview not available for this type.</p>`;
+    function showModal(row) {
+        const modal = document.getElementById('modal');
+        const modalContent = document.getElementById('modalContent');
+        const typeClass = typeColors[row.type] || 'bg-gray-500';
+        modalContent.innerHTML = `
+            <p><strong class="text-purple-600">ID:</strong> <span class="text-gray-800">${row.id}</span></p>
+            <p><strong class="text-purple-600">Intent:</strong> <span class="text-gray-800">${row.intent}</span></p>
+            <p><strong class="text-purple-600">Type:</strong> <span class="type-badge ${typeClass}">${row.type}</span></p>
+            <p><strong class="text-purple-600">Content:</strong> <span class="text-gray-800">${row.content}</span></p>
+            <p><strong class="text-purple-600">Preview:</strong> <span class="text-gray-800">${row.preview || '-'}</span></p>
+            <p><strong class="text-purple-600">Place:</strong> <span class="text-gray-800">${row.place || '-'}</span></p>
+            <p><strong class="text-purple-600">Address:</strong> <span class="text-gray-800">${row.address || '-'}</span></p>
+        `;
+        modal.classList.remove('hidden');
+    }
+
+    document.getElementById('closeModal').onclick = function() {
+        document.getElementById('modal').classList.add('hidden');
+    };
+
+    function showPreview(row) {
+        const previewModal = document.getElementById('previewModal');
+        const previewContent = document.getElementById('previewContent');
+        previewContent.innerHTML = '';
+        let previewHtml = '';
+        const mediaUrl = row.preview || row.content;
+        switch (row.type) {
+            case 'TEXT':
+                previewHtml = `<p class="text-gray-800">${row.content}</p>`;
+                break;
+            case 'IMAGE':
+                previewHtml = `<img src="${mediaUrl}" alt="Image Preview" class="max-w-full h-auto">`;
+                break;
+            case 'VIDEO':
+                previewHtml = `<video controls src="${mediaUrl}" class="max-w-full h-auto"></video>`;
+                break;
+            case 'AUDIO':
+                previewHtml = `<audio controls src="${mediaUrl}"></audio>`;
+                break;
+            case 'STICKER':
+                previewHtml = `<p class="text-gray-800">Sticker: ${row.content}</p>`;
+                break;
+            case 'LOCATION':
+                previewHtml = `<p class="text-gray-800">Location: ${row.place || ''} - ${row.address || ''}</p>`;
+                break;
+            case 'FILE':
+                previewHtml = `<a href="${mediaUrl}" target="_blank" class="text-blue-500 hover:underline">Download File</a>`;
+                break;
+            case 'FLEX':
+            case 'TEMPLATE':
+            case 'IMAGEMAP':
+                previewHtml = `<pre class="whitespace-pre-wrap text-gray-800">${row.content}</pre>`;
+                break;
+            default:
+                previewHtml = `<p class="text-gray-800">Preview not available for this type.</p>`;
+        }
+        previewContent.innerHTML = previewHtml;
+        previewModal.classList.remove('hidden');
+    }
+
+    document.getElementById('closePreviewModal').onclick = function() {
+        document.getElementById('previewModal').classList.add('hidden');
+    };
+
+    async function editBotLine(id) {
+        try {
+            const response = await fetch(edgeFunctionUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ method: 'GET_BY_ID', id: parseInt(id) })
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error || 'Unknown error'}`);
             }
-            previewContent.innerHTML = previewHtml;
-            previewModal.classList.remove('hidden');
+            const data = await response.json();
+            if (!data) {
+                throw new Error('No data returned for ID');
+            }
+            document.getElementById('id').value = data.id;
+            document.getElementById('intent').value = data.intent || '';
+            document.getElementById('type').value = data.type || 'TEXT';
+            document.getElementById('content').value = data.content || '';
+            document.getElementById('preview').value = data.preview || '';
+            document.getElementById('place').value = data.place || '';
+            document.getElementById('address').value = data.address || '';
+            document.getElementById('formTitle').textContent = 'Edit Bot Line';
+            document.getElementById('formModal').classList.remove('hidden');
+        } catch (error) {
+            Toastify({ text: `Error fetching record: ${error.message}`, backgroundColor: 'red' }).showToast();
         }
+    }
 
-        document.getElementById('closePreviewModal').onclick = function() {
-            document.getElementById('previewModal').classList.add('hidden');
-        };
-
-        async function editBotLine(id) {
+    async function deleteBotLine(id) {
+        if (confirm('Are you sure you want to delete this record?')) {
             try {
                 const response = await fetch(edgeFunctionUrl, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${supabaseApiKey}`
+                        'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ method: 'GET_BY_ID', id: parseInt(id) })
+                    body: JSON.stringify({ method: 'DELETE', id: parseInt(id) })
                 });
                 if (!response.ok) {
                     const errorData = await response.json();
-                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.message || 'Unknown error'}`);
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error || 'Unknown error'}`);
                 }
-                const data = await response.json();
-                if (!data) {
-                    throw new Error('No data returned for ID');
-                }
-                document.getElementById('id').value = data.id;
-                document.getElementById('intent').value = data.intent || '';
-                document.getElementById('type').value = data.type || 'TEXT';
-                document.getElementById('content').value = data.content || '';
-                document.getElementById('preview').value = data.preview || '';
-                document.getElementById('place').value = data.place || '';
-                document.getElementById('address').value = data.address || '';
-                document.getElementById('formTitle').textContent = 'Edit Bot Line';
-                document.getElementById('formModal').classList.remove('hidden');
-            } catch (error) {
-                Toastify({ text: `Error fetching record: ${error.message}`, backgroundColor: 'red' }).showToast();
-            }
-        }
-
-        async function deleteBotLine(id) {
-            if (confirm('Are you sure you want to delete this record?')) {
-                try {
-                    const response = await fetch(edgeFunctionUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${supabaseApiKey}`
-                        },
-                        body: JSON.stringify({ method: 'DELETE', id: parseInt(id) })
-                    });
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.message || 'Unknown error'}`);
-                    }
-                    Toastify({ text: 'Record deleted successfully', backgroundColor: 'green' }).showToast();
-                    await renderTable();
-                } catch (error) {
-                    Toastify({ text: `Error deleting record: ${error.message}`, backgroundColor: 'red' }).showToast();
-                }
-            }
-        }
-
-        document.getElementById('botLineForm').onsubmit = async function(e) {
-            e.preventDefault();
-            const id = document.getElementById('id').value;
-            const data = {
-                intent: document.getElementById('intent').value,
-                type: document.getElementById('type').value,
-                content: document.getElementById('content').value,
-                preview: document.getElementById('preview').value || null,
-                place: document.getElementById('place').value || null,
-                address: document.getElementById('address').value || null
-            };
-            const method = id ? 'PUT' : 'POST';
-            try {
-                const response = await fetch(edgeFunctionUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${supabaseApiKey}`
-                    },
-                    body: JSON.stringify({ method, data, id: id ? parseInt(id) : undefined })
-                });
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.message || 'Unknown error'}`);
-                }
-                Toastify({ text: 'Record saved successfully', backgroundColor: 'green' }).showToast();
-                confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-                document.getElementById('formModal').classList.add('hidden');
-                document.getElementById('botLineForm').reset();
-                document.getElementById('id').value = '';
+                Toastify({ text: 'Record deleted successfully', backgroundColor: 'green' }).showToast();
                 await renderTable();
             } catch (error) {
-                Toastify({ text: `Error saving record: ${error.message}`, backgroundColor: 'red' }).showToast();
+                Toastify({ text: `Error deleting record: ${error.message}`, backgroundColor: 'red' }).showToast();
             }
+        }
+    }
+
+    document.getElementById('botLineForm').onsubmit = async function(e) {
+        e.preventDefault();
+        const id = document.getElementById('id').value;
+        const data = {
+            intent: document.getElementById('intent').value.trim(),
+            type: document.getElementById('type').value,
+            content: document.getElementById('content').value.trim(),
+            preview: document.getElementById('preview').value.trim() || null,
+            place: document.getElementById('place').value.trim() || null,
+            address: document.getElementById('address').value.trim() || null
         };
 
-        document.getElementById('addButton').onclick = function() {
+        // Client-side validation
+        if (!data.intent || !data.type || !data.content) {
+            Toastify({ text: 'Intent, Type, and Content are required', backgroundColor: 'red' }).showToast();
+            return;
+        }
+
+        const method = id ? 'PUT' : 'POST';
+        try {
+            const response = await fetch(edgeFunctionUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ method, data, id: id ? parseInt(id) : undefined })
+            });
+            const responseBody = await response.json();
+            console.log('Response:', responseBody);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}, message: ${responseBody.error || 'Unknown error'}`);
+            }
+            Toastify({ text: 'Record saved successfully', backgroundColor: 'green' }).showToast();
+            confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+            document.getElementById('formModal').classList.add('hidden');
             document.getElementById('botLineForm').reset();
             document.getElementById('id').value = '';
-            document.getElementById('formTitle').textContent = 'Add Bot Line';
-            document.getElementById('formModal').classList.remove('hidden');
-        };
+            await renderTable();
+        } catch (error) {
+            console.error('Error details:', error);
+            Toastify({ text: `Error saving record: ${error.message}`, backgroundColor: 'red' }).showToast();
+        }
+    };
 
-        document.getElementById('closeFormModal').onclick = function() {
-            document.getElementById('formModal').classList.add('hidden');
-        };
+    document.getElementById('addButton').onclick = function() {
+        document.getElementById('botLineForm').reset();
+        document.getElementById('id').value = '';
+        document.getElementById('formTitle').textContent = 'Add Bot Line';
+        document.getElementById('formModal').classList.remove('hidden');
+    };
 
-        document.getElementById('searchInput').addEventListener('input', function(e) {
-            renderTable(e.target.value);
-        });
+    document.getElementById('closeFormModal').onclick = function() {
+        document.getElementById('formModal').classList.add('hidden');
+    };
 
-        renderTable();
-    </script>
+    document.getElementById('searchInput').addEventListener('input', function(e) {
+        renderTable(e.target.value);
+    });
+
+    renderTable();
+</script>
 </body>
 </html>
