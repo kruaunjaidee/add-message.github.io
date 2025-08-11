@@ -188,271 +188,385 @@
     </div>
 
     <script>
-    const edgeFunctionUrl = 'https://mihtvcbzguzkvfwnlnem.supabase.co/functions/v1/add-messages';
-    const typeColors = {
-        'TEXT': 'bg-green-500',
-        'IMAGE': 'bg-blue-500',
-        'VIDEO': 'bg-red-500',
-        'FLEX': 'bg-yellow-500',
-        'TEMPLATE': 'bg-purple-500',
-        'IMAGEMAP': 'bg-indigo-500',
-        'AUDIO': 'bg-pink-500',
-        'STICKER': 'bg-orange-500',
-        'LOCATION': 'bg-teal-500',
-        'FILE': 'bg-cyan-500'
-    };
+const SUPABASE_FUNCTIONS_URL = 'https://mihtvcbzguzkvfwnlnem.supabase.co/functions/v1/customer-web';
+let genderChart, memberTypeChart, totalRecordsChart, ageRangeChart;
+let currentPage = 1;
+const recordsPerPage = 25;
+let allData = [];
 
-    let typeChartInstance = null;
+// Initialize Flatpickr
+flatpickr("#birth_date", {
+    dateFormat: "Y-m-d",
+    locale: {
+        firstDayOfWeek: 1,
+        weekdays: { shorthand: ['อา', 'จ', 'อ', 'พ', 'พฤ', 'ศ', 'ส'], longhand: ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'] },
+        months: { shorthand: ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'], longhand: ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน', 'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'] }
+    }
+});
 
-    async function fetchBotLines(search = '') {
-        try {
-            const response = await fetch(edgeFunctionUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ method: 'GET', data: { search } })
-            });
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error || 'Unknown error'}`);
-            }
+// Modal control functions
+function openModal() {
+    const modal = document.getElementById('modal');
+    modal.classList.remove('hidden');
+    const form = document.getElementById('customerForm');
+    form.reset();
+    form.onsubmit = null;
+    form.onsubmit = handleFormSubmit;
+}
+
+function closeModal() {
+    const modal = document.getElementById('modal');
+    modal.classList.add('hidden');
+    const form = document.getElementById('customerForm');
+    form.reset();
+    form.onsubmit = null;
+    form.onsubmit = handleFormSubmit;
+}
+
+// Enhanced fetch with detailed error handling
+async function makeRequest(payload) {
+    try {
+        const response = await fetch(SUPABASE_FUNCTIONS_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
             const data = await response.json();
-            if (!Array.isArray(data)) {
-                throw new Error('Response is not an array');
+            if (response.status === 409) {
+                throw new Error('ข้อมูลลูกค้าซ้ำ: ชื่อและหมายเลขโทรศัพท์นี้มีอยู่ในระบบแล้ว');
             }
-            return data;
-        } catch (error) {
-            Toastify({ text: `Error fetching data: ${error.message}`, backgroundColor: 'red' }).showToast();
-            return [];
+            throw new Error(`HTTP error ${response.status}: ${data.error || response.statusText}`);
         }
-    }
-
-    async function renderTable(search = '') {
-        const data = await fetchBotLines(search);
-        const tbody = document.getElementById('botLineTable');
-        tbody.innerHTML = '';
-        data.forEach(row => {
-            const tr = document.createElement('tr');
-            tr.className = 'table-row border-b';
-            const typeClass = typeColors[row.type] || 'bg-gray-500';
-            tr.innerHTML = `
-                <td class="p-2 text-gray-800">${row.id}</td>
-                <td class="p-2 text-gray-800">${row.intent}</td>
-                <td class="p-2"><span class="type-badge ${typeClass}">${row.type}</span></td>
-                <td class="p-2">
-                    <button onclick="editBotLine(${row.id})" class="text-blue-500 hover:underline">Edit</button>
-                    <button onclick="deleteBotLine(${row.id})" class="text-red-500 hover:underline ml-2">Delete</button>
-                    <button onclick="showPreview(${JSON.stringify(row)})" class="text-green-500 hover:underline ml-2">Preview</button>
-                </td>
-            `;
-            tr.onclick = () => showModal(row);
-            tbody.appendChild(tr);
-        });
-        renderChart(data);
-    }
-
-    async function renderChart(data) {
-        const types = ['TEXT', 'IMAGE', 'VIDEO', 'FLEX', 'TEMPLATE', 'IMAGEMAP', 'AUDIO', 'STICKER', 'LOCATION', 'FILE'];
-        const counts = types.map(type => data.filter(row => row.type === type).length);
-        const colors = ['#22c55e', '#3b82f6', '#ef4444', '#eab308', '#a855f7', '#6366f1', '#ec4899', '#f97316', '#14b8a6', '#06b6d4'];
-        const ctx = document.getElementById('typeChart').getContext('2d');
-        
-        if (typeChartInstance) {
-            typeChartInstance.destroy();
-            typeChartInstance = null;
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            const text = await response.text();
+            throw new Error(`Expected JSON, received ${contentType}: ${text.substring(0, 100)}...`);
         }
-
-        typeChartInstance = new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: types,
-                datasets: [{
-                    data: counts,
-                    backgroundColor: colors
-                }]
-            },
-            options: { responsive: true }
-        });
+        const data = await response.json();
+        if (data.error) throw new Error(data.error);
+        return data;
+    } catch (error) {
+        console.error('Fetch error:', error);
+        throw error;
     }
+}
 
-    function showModal(row) {
-        const modal = document.getElementById('modal');
-        const modalContent = document.getElementById('modalContent');
-        const typeClass = typeColors[row.type] || 'bg-gray-500';
-        modalContent.innerHTML = `
-            <p><strong class="text-purple-600">ID:</strong> <span class="text-gray-800">${row.id}</span></p>
-            <p><strong class="text-purple-600">Intent:</strong> <span class="text-gray-800">${row.intent}</span></p>
-            <p><strong class="text-purple-600">Type:</strong> <span class="type-badge ${typeClass}">${row.type}</span></p>
-            <p><strong class="text-purple-600">Content:</strong> <span class="text-gray-800">${row.content}</span></p>
-            <p><strong class="text-purple-600">Preview:</strong> <span class="text-gray-800">${row.preview || '-'}</span></p>
-            <p><strong class="text-purple-600">Place:</strong> <span class="text-gray-800">${row.place || '-'}</span></p>
-            <p><strong class="text-purple-600">Address:</strong> <span class="text-gray-800">${row.address || '-'}</span></p>
+// Load customer data
+async function loadData(searchQuery = '') {
+    Swal.fire({ title: 'กำลังโหลด...', didOpen: () => Swal.showLoading() });
+    try {
+        const payload = searchQuery ? { method: 'SEARCH', query: searchQuery } : { method: 'GET' };
+        const data = await makeRequest(payload);
+        allData = data;
+        Swal.close();
+        currentPage = 1;
+        displayData();
+        updateCharts(allData);
+    } catch (error) {
+        Swal.fire('เกิดข้อผิดพลาด!', `ไม่สามารถโหลดข้อมูล: ${error.message}`, 'error');
+        console.error('Load data error:', error);
+    }
+}
+
+// Display data in table with pagination
+function displayData() {
+    const tableBody = document.getElementById('customerTable');
+    tableBody.innerHTML = '';
+    const start = (currentPage - 1) * recordsPerPage;
+    const end = start + recordsPerPage;
+    const paginatedData = allData.slice(start, end);
+
+    paginatedData.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.classList.add('border-b', 'hover:bg-gray-100', 'cursor-pointer');
+        const memberTypeDisplay = Array.isArray(item.member_type) && item.member_type.length > 0 
+            ? (item.member_type[0] === 'member' ? 'ลูกค้าสมาชิก' : 'ลูกค้าใหม่') 
+            : '-';
+        tr.innerHTML = `
+            <td class="border px-4 py-2">${item.first_name}</td>
+            <td class="border px-4 py-2">${item.last_name}</td>
+            <td class="border px-4 py-2">${item.gender === 'male' ? 'ชาย' : 'หญิง'}</td>
+            <td class="border px-4 py-2">${memberTypeDisplay}</td>
+            <td class="border px-4 py-2">
+                <button class="edit-btn bg-yellow-500 hover:bg-yellow-600 text-white py-1 px-2 rounded">แก้ไข</button>
+                <button class="delete-btn bg-red-500 hover:bg-red-600 text-white py-1 px-2 rounded">ลบ</button>
+            </td>
         `;
-        modal.classList.remove('hidden');
-    }
-
-    document.getElementById('closeModal').onclick = function() {
-        document.getElementById('modal').classList.add('hidden');
-    };
-
-    function showPreview(row) {
-        const previewModal = document.getElementById('previewModal');
-        const previewContent = document.getElementById('previewContent');
-        previewContent.innerHTML = '';
-        let previewHtml = '';
-        const mediaUrl = row.preview || row.content;
-        switch (row.type) {
-            case 'TEXT':
-                previewHtml = `<p class="text-gray-800">${row.content}</p>`;
-                break;
-            case 'IMAGE':
-                previewHtml = `<img src="${mediaUrl}" alt="Image Preview" class="max-w-full h-auto">`;
-                break;
-            case 'VIDEO':
-                previewHtml = `<video controls src="${mediaUrl}" class="max-w-full h-auto"></video>`;
-                break;
-            case 'AUDIO':
-                previewHtml = `<audio controls src="${mediaUrl}"></audio>`;
-                break;
-            case 'STICKER':
-                previewHtml = `<p class="text-gray-800">Sticker: ${row.content}</p>`;
-                break;
-            case 'LOCATION':
-                previewHtml = `<p class="text-gray-800">Location: ${row.place || ''} - ${row.address || ''}</p>`;
-                break;
-            case 'FILE':
-                previewHtml = `<a href="${mediaUrl}" target="_blank" class="text-blue-500 hover:underline">Download File</a>`;
-                break;
-            case 'FLEX':
-            case 'TEMPLATE':
-            case 'IMAGEMAP':
-                previewHtml = `<pre class="whitespace-pre-wrap text-gray-800">${row.content}</pre>`;
-                break;
-            default:
-                previewHtml = `<p class="text-gray-800">Preview not available for this type.</p>`;
-        }
-        previewContent.innerHTML = previewHtml;
-        previewModal.classList.remove('hidden');
-    }
-
-    document.getElementById('closePreviewModal').onclick = function() {
-        document.getElementById('previewModal').classList.add('hidden');
-    };
-
-    async function editBotLine(id) {
-        try {
-            const response = await fetch(edgeFunctionUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ method: 'GET_BY_ID', id: parseInt(id) })
-            });
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error || 'Unknown error'}`);
-            }
-            const data = await response.json();
-            if (!data) {
-                throw new Error('No data returned for ID');
-            }
-            document.getElementById('id').value = data.id;
-            document.getElementById('intent').value = data.intent || '';
-            document.getElementById('type').value = data.type || 'TEXT';
-            document.getElementById('content').value = data.content || '';
-            document.getElementById('preview').value = data.preview || '';
-            document.getElementById('place').value = data.place || '';
-            document.getElementById('address').value = data.address || '';
-            document.getElementById('formTitle').textContent = 'Edit Bot Line';
-            document.getElementById('formModal').classList.remove('hidden');
-        } catch (error) {
-            Toastify({ text: `Error fetching record: ${error.message}`, backgroundColor: 'red' }).showToast();
-        }
-    }
-
-    async function deleteBotLine(id) {
-        if (confirm('Are you sure you want to delete this record?')) {
-            try {
-                const response = await fetch(edgeFunctionUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ method: 'DELETE', id: parseInt(id) })
-                });
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error || 'Unknown error'}`);
-                }
-                Toastify({ text: 'Record deleted successfully', backgroundColor: 'green' }).showToast();
-                await renderTable();
-            } catch (error) {
-                Toastify({ text: `Error deleting record: ${error.message}`, backgroundColor: 'red' }).showToast();
-            }
-        }
-    }
-
-    document.getElementById('botLineForm').onsubmit = async function(e) {
-        e.preventDefault();
-        const id = document.getElementById('id').value;
-        const data = {
-            intent: document.getElementById('intent').value.trim(),
-            type: document.getElementById('type').value,
-            content: document.getElementById('content').value.trim(),
-            preview: document.getElementById('preview').value.trim() || null,
-            place: document.getElementById('place').value.trim() || null,
-            address: document.getElementById('address').value.trim() || null
-        };
-
-        // Client-side validation
-        if (!data.intent || !data.type || !data.content) {
-            Toastify({ text: 'Intent, Type, and Content are required', backgroundColor: 'red' }).showToast();
-            return;
-        }
-
-        const method = id ? 'PUT' : 'POST';
-        try {
-            const response = await fetch(edgeFunctionUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ method, data, id: id ? parseInt(id) : undefined })
-            });
-            const responseBody = await response.json();
-            console.log('Response:', responseBody);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}, message: ${responseBody.error || 'Unknown error'}`);
-            }
-            Toastify({ text: 'Record saved successfully', backgroundColor: 'green' }).showToast();
-            confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-            document.getElementById('formModal').classList.add('hidden');
-            document.getElementById('botLineForm').reset();
-            document.getElementById('id').value = '';
-            await renderTable();
-        } catch (error) {
-            console.error('Error details:', error);
-            Toastify({ text: `Error saving record: ${error.message}`, backgroundColor: 'red' }).showToast();
-        }
-    };
-
-    document.getElementById('addButton').onclick = function() {
-        document.getElementById('botLineForm').reset();
-        document.getElementById('id').value = '';
-        document.getElementById('formTitle').textContent = 'Add Bot Line';
-        document.getElementById('formModal').classList.remove('hidden');
-    };
-
-    document.getElementById('closeFormModal').onclick = function() {
-        document.getElementById('formModal').classList.add('hidden');
-    };
-
-    document.getElementById('searchInput').addEventListener('input', function(e) {
-        renderTable(e.target.value);
+        tr.querySelector('.edit-btn').addEventListener('click', () => editCustomer(item.id));
+        tr.querySelector('.delete-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteCustomer(item.id);
+        });
+        tableBody.appendChild(tr);
     });
 
-    renderTable();
+    updatePagination();
+}
+
+// Update pagination controls
+function updatePagination() {
+    const totalPages = Math.ceil(allData.length / recordsPerPage);
+    const pagination = document.getElementById('pagination');
+    pagination.innerHTML = '';
+
+    const prevButton = document.createElement('button');
+    prevButton.textContent = 'ก่อนหน้า';
+    prevButton.disabled = currentPage === 1;
+    prevButton.addEventListener('click', () => {
+        if (currentPage > 1) {
+            currentPage--;
+            displayData();
+        }
+    });
+    pagination.appendChild(prevButton);
+
+    for (let i = 1; i <= totalPages; i++) {
+        const pageButton = document.createElement('button');
+        pageButton.textContent = i;
+        pageButton.disabled = i === currentPage;
+        pageButton.addEventListener('click', () => {
+            currentPage = i;
+            displayData();
+        });
+        pagination.appendChild(pageButton);
+    }
+
+    const nextButton = document.createElement('button');
+    nextButton.textContent = 'ถัดไป';
+    nextButton.disabled = currentPage === totalPages;
+    nextButton.addEventListener('click', () => {
+        if (currentPage < totalPages) {
+            currentPage++;
+            displayData();
+        }
+    });
+    pagination.appendChild(nextButton);
+}
+
+// Update charts
+function updateCharts(data) {
+    const genderCounts = { male: 0, female: 0 };
+    const memberCounts = { member: 0, new: 0 };
+    const ageRanges = { '0-20': 0, '21-40': 0, '41-60': 0, '61+': 0 };
+
+    data.forEach(item => {
+        genderCounts[item.gender]++;
+        if (Array.isArray(item.member_type) && item.member_type.length > 0) {
+            if (item.member_type[0] === 'member') memberCounts.member++;
+            else if (item.member_type[0] === 'new') memberCounts.new++;
+        }
+        if (item.age <= 20) ageRanges['0-20']++;
+        else if (item.age <= 40) ageRanges['21-40']++;
+        else if (item.age <= 60) ageRanges['41-60']++;
+        else ageRanges['61+']++;
+    });
+
+    if (genderChart) genderChart.destroy();
+    if (memberTypeChart) memberTypeChart.destroy();
+    if (totalRecordsChart) totalRecordsChart.destroy();
+    if (ageRangeChart) ageRangeChart.destroy();
+
+    genderChart = new Chart(document.getElementById('genderChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['ชาย', 'หญิง'],
+            datasets: [{ data: [genderCounts.male, genderCounts.female], backgroundColor: ['#3B82F6', '#EC4899'] }]
+        },
+        options: { plugins: { title: { display: true, text: 'สัดส่วนเพศ' } } }
+    });
+
+    memberTypeChart = new Chart(document.getElementById('memberTypeChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['ลูกค้าสมาชิก', 'ลูกค้าใหม่'],
+            datasets: [{ data: [memberCounts.member, memberCounts.new], backgroundColor: ['#10B981', '#F59E0B'] }]
+        },
+        options: { plugins: { title: { display: true, text: 'ประเภทสมาชิก' } } }
+    });
+
+    totalRecordsChart = new Chart(document.getElementById('totalRecordsChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['จำนวนทั้งหมด'],
+            datasets: [{ data: [data.length], backgroundColor: ['#6366F1'] }]
+        },
+        options: { plugins: { title: { display: true, text: 'จำนวนทั้งหมด' } } }
+    });
+
+    ageRangeChart = new Chart(document.getElementById('ageRangeChart'), {
+        type: 'doughnut',
+        data: {
+            labels: ['0-20', '21-40', '41-60', '61+'],
+            datasets: [{ data: Object.values(ageRanges), backgroundColor: ['#EF4444', '#F59E0B', '#10B981', '#3B82F6'] }]
+        },
+        options: { plugins: { title: { display: true, text: 'ช่วงอายุ' } } }
+    });
+}
+
+// Handle form submission
+async function handleFormSubmit(e) {
+    e.preventDefault();
+    Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
+
+    const formData = new FormData(e.target);
+    const data = Object.fromEntries(formData);
+    data.member_type = [formData.get('member_type')].filter(Boolean);
+    data.frame_type = formData.getAll('frame_type');
+    data.material_index = formData.getAll('material_index');
+    data.lens_option = formData.getAll('lens_option');
+    data.lens_design = formData.getAll('lens_design');
+    data.tint = formData.getAll('tint');
+    data.treatment = formData.getAll('treatment');
+    data.wear_type = formData.getAll('wear_type');
+
+    // Trim string fields to prevent spaces causing duplicate issues
+    ['first_name', 'last_name', 'phone'].forEach(key => {
+        if (data[key]) data[key] = data[key].trim();
+    });
+
+    // Convert numeric fields
+    ['age', 'frame_price', 'lens_price', 'discount', 'total', 'paid', 'outstanding'].forEach(key => {
+        if (data[key]) data[key] = parseFloat(data[key]);
+        else data[key] = null;
+    });
+
+    try {
+        const result = await makeRequest({ method: 'POST', data });
+        Swal.fire('สำเร็จ!', 'บันทึกข้อมูลเรียบร้อย', 'success');
+        closeModal();
+        loadData(document.getElementById('searchInput').value);
+    } catch (error) {
+        Swal.fire('เกิดข้อผิดพลาด!', `ไม่สามารถบันทึกข้อมูล: ${error.message}`, 'error');
+        console.error('Form submission error:', error);
+    }
+}
+
+// Edit customer
+async function editCustomer(id) {
+    try {
+        const record = await makeRequest({ method: 'GET_BY_ID', id });
+        openModal();
+        const form = document.getElementById('customerForm');
+
+        // Reset all radio buttons and checkboxes
+        form.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(input => {
+            input.checked = false;
+        });
+
+        // Populate form fields
+        Object.entries(record).forEach(([key, value]) => {
+            if (key === 'member_type') {
+                if (Array.isArray(value) && value.length > 0) {
+                    const radio = form.querySelector(`input[name="member_type"][value="${value[0]}"]`);
+                    if (radio) radio.checked = true;
+                }
+            } else if (Array.isArray(value)) {
+                value.forEach(val => {
+                    const input = form.querySelector(`input[name="${key}"][value="${val}"]`);
+                    if (input) input.checked = true;
+                });
+            } else if (key === 'birth_date') {
+                const birthDateInput = form.querySelector('#birth_date');
+                if (birthDateInput && value) {
+                    birthDateInput._flatpickr.setDate(value, false);
+                }
+            } else {
+                const input = form.querySelector(`[name="${key}"]`);
+                if (input) input.value = value !== null && value !== undefined ? value : '';
+            }
+        });
+
+        // Set submit handler for editing
+        form.onsubmit = null;
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
+            const formData = new FormData(e.target);
+            const updatedData = Object.fromEntries(formData);
+            updatedData.member_type = [formData.get('member_type')].filter(Boolean);
+            updatedData.frame_type = formData.getAll('frame_type');
+            updatedData.material_index = formData.getAll('material_index');
+            updatedData.lens_option = formData.getAll('lens_option');
+            updatedData.lens_design = formData.getAll('lens_design');
+            updatedData.tint = formData.getAll('tint');
+            updatedData.treatment = formData.getAll('treatment');
+            updatedData.wear_type = formData.getAll('wear_type');
+
+            // Trim string fields
+            ['first_name', 'last_name', 'phone'].forEach(key => {
+                if (updatedData[key]) updatedData[key] = updatedData[key].trim();
+            });
+
+            // Convert numeric fields
+            ['age', 'frame_price', 'lens_price', 'discount', 'total', 'paid', 'outstanding'].forEach(key => {
+                if (updatedData[key]) updatedData[key] = parseFloat(updatedData[key]);
+                else updatedData[key] = null;
+            });
+
+            try {
+                const result = await makeRequest({ method: 'PUT', id, data: updatedData });
+                Swal.fire('สำเร็จ!', 'แก้ไขข้อมูลเรียบร้อย', 'success');
+                closeModal();
+                loadData(document.getElementById('searchInput').value);
+            } catch (error) {
+                Swal.fire('เกิดข้อผิดพลาด!', `ไม่สามารถแก้ไขข้อมูล: ${error.message}`, 'error');
+                console.error('Edit customer error:', error);
+            }
+        };
+    } catch (error) {
+        Swal.fire('เกิดข้อผิดพลาด!', `ไม่สามารถโหลดข้อมูลลูกค้า: ${error.message}`, 'error');
+        console.error('Edit customer error:', error);
+    }
+}
+
+// Delete customer
+async function deleteCustomer(id) {
+    Swal.fire({
+        title: 'ยืนยันการลบ?',
+        text: 'ข้อมูลนี้จะถูกลบอย่างถาวร',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'ลบ',
+        cancelButtonText: 'ยกเลิก'
+    }).then(async (result) => {
+        if (result.isConfirmed) {
+            try {
+                const result = await makeRequest({ method: 'DELETE', id });
+                Swal.fire('สำเร็จ!', 'ลบข้อมูลเรียบร้อย', 'success');
+                loadData(document.getElementById('searchInput').value);
+            } catch (error) {
+                Swal.fire('เกิดข้อผิดพลาด!', `ไม่สามารถลบข้อมูล: ${error.message}`, 'error');
+                console.error('Delete customer error:', error);
+            }
+        }
+    });
+}
+
+// Handle search
+function handleSearch() {
+    const searchQuery = document.getElementById('searchInput').value.trim();
+    loadData(searchQuery);
+}
+
+// Initialize app
+document.addEventListener('DOMContentLoaded', async () => {
+    const modal = document.getElementById('modal');
+    modal.classList.add('hidden');
+
+    setTimeout(() => {
+        document.getElementById('preloader').style.display = 'none';
+        loadData();
+    }, 1000);
+
+    document.getElementById('openModalBtn').addEventListener('click', openModal);
+    document.getElementById('closeModalBtn').addEventListener('click', closeModal);
+    document.getElementById('customerForm').addEventListener('submit', handleFormSubmit);
+    document.getElementById('searchBtn').addEventListener('click', handleSearch);
+    document.getElementById('searchInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleSearch();
+    });
+});
 </script>
 </body>
 </html>
